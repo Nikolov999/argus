@@ -1,0 +1,28 @@
+$ adreview kerb -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --password-age
+
+    ___    ____  ____  _______    _________ _       __
+   /   |  / __ \/ __ \/ ____/ |  / /  _/ _ \ |     / /
+  / /| | / / / / /_/ / __/  | | / // //  __/ | /| / /
+ / ___ |/ /_/ / _, _/ /___  | |/ // // /\___| |/ |/ /
+/_/  |_/_____/_/ |_/_____/  |___/___/_/      |__/|__/
+
+        Active Directory Review Framework
+                 by EchoPentest
+
+KERBEROS SECURITY REVIEW
+
+[ACCOUNTS WITH PREAUTH DISABLED]
+svc_legacy
+
+[SERVICE ACCOUNTS WITH SPNs]
+sql_svc     SPN: MSSQLSvc/sql01.corp.local
+web_svc     SPN: HTTP/web01.corp.local
+
+[PRIVILEGED ACCOUNTS WITH SPNs]
+backup_admin    SPN: MSSQLSvc/backup01.corp.local
+
+[LEGACY ENCRYPTION TYPES ENABLED]
+legacy_app
+
+[PASSWORD AGE REVIEW]
+svc_backup

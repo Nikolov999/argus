@@ -1,0 +1,7 @@
+adreview
+*.exe
+*.out
+*.log
+*.tmp
+dist/
+bin/
