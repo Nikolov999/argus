@@ -81,7 +81,7 @@ func defaultConfig() models.Config {
 }
 
 func printBanner() {
-	fmt.Println(`
+	fmt.Print(`
     ___    ____  ____  _______    _________ _       __
    /   |  / __ \/ __ \/ ____/ |  / /  _/ _ \ |     / /
   / /| | / / / / /_/ / __/  | | / // //  __/ | /| / /
