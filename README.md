@@ -209,7 +209,7 @@ adreview/
 
 ## Privilege Sprawl Review
 
-![Sprawl](screenshots/sprawl.png)
+![Sprawl](docs/screenshots/sprawl.png)
 
 ### Executive Summary
 
