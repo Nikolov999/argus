@@ -133,7 +133,7 @@ Example:
 
 ```bash
 adreview kerb -d corp.local -dc 10.10.10.5 --html kerberos_report.html
-
+```
 ---
 
 ## Architecture summary
