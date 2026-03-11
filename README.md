@@ -65,6 +65,7 @@ Active Directory environments accumulate configuration drift, privilege sprawl, 
 
 ```bash
 adreview auto -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
+```
 Example output
 Active Directory Review Framework
 by EchoPentest
