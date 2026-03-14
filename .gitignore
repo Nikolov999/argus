@@ -3,5 +3,4 @@ adreview
 *.out
 *.log
 *.tmp
-dist/
 bin/
