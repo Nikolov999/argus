@@ -1,6 +1,6 @@
 package audit
 
-import "adreview/internal/models"
+import "argus/internal/models"
 
 func AdminScope(groups []models.GroupRecord) models.AdminScopeResult {
 	result := models.AdminScopeResult{

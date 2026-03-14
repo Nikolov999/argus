@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"adreview/internal/audit"
-	ldapclient "adreview/internal/ldap"
-	"adreview/internal/models"
-	"adreview/internal/report"
+	"argus/internal/audit"
+	ldapclient "argus/internal/ldap"
+	"argus/internal/models"
+	"argus/internal/report"
 	"flag"
 	"fmt"
 	"os"
@@ -15,7 +15,7 @@ import (
 func parseCommonFlags(args []string) (models.Config, error) {
 	cfg := defaultConfig()
 
-	fs := flag.NewFlagSet("adreview", flag.ContinueOnError)
+	fs := flag.NewFlagSet("argus", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
 	fs.StringVar(&cfg.Domain, "d", "", "domain")
@@ -26,9 +26,11 @@ func parseCommonFlags(args []string) (models.Config, error) {
 	fs.StringVar(&cfg.JSONOut, "json", "", "json output path")
 	fs.StringVar(&cfg.HTMLOut, "html", "", "html output path")
 	fs.BoolVar(&cfg.PrivilegedOnly, "privileged-check", false, "show privileged principals only")
+	fs.BoolVar(&cfg.PrivilegedOnly, "privileged-only", false, "show high-value targets only")
 	fs.BoolVar(&cfg.PasswordAge, "password-age", false, "enable password age review")
 	fs.IntVar(&cfg.TimeoutSeconds, "timeout", 15, "timeout seconds")
 	fs.IntVar(&cfg.Workers, "workers", 32, "concurrent workers")
+	fs.StringVar(&cfg.AdminNameRegex, "admin-name-regex", `(?i)(^adm-|admin|svc|service|sql|backup|sa_)`, "regex for expected admin account naming")
 
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
@@ -197,7 +199,7 @@ func RunAuto(cfg models.Config) int {
 		ADCS:        audit.ADCSReview(),
 	}
 
-	fmt.Println("ADREVIEW EXECUTIVE SUMMARY")
+	fmt.Println("ARGUS EXECUTIVE SUMMARY")
 	fmt.Println()
 	fmt.Printf("Users: %d\n", data.Enum.Users)
 	fmt.Printf("Groups: %d\n", data.Enum.Groups)
@@ -324,7 +326,12 @@ func RunCert(cfg models.Config) int {
 		return fail(err)
 	}
 
-	result := audit.CertSurface(templates)
+	sidMap, err := client.SearchPrincipalSIDMap()
+	if err != nil {
+		return fail(err)
+	}
+
+	result := audit.CertSurface(templates, sidMap)
 
 	fmt.Println("CERTIFICATE TEMPLATE SURFACE")
 	fmt.Println()
@@ -339,11 +346,38 @@ func RunCert(cfg models.Config) int {
 		if name == "" {
 			name = t.Name
 		}
+
 		fmt.Printf("%s\n", name)
+
 		if len(t.EKUs) > 0 {
 			fmt.Printf("EKUs: %s\n", strings.Join(t.EKUs, ", "))
 		}
-		fmt.Printf("Risk Summary: %s\n\n", t.RiskSummary)
+
+		fmt.Printf("Risk Score: %d\n", t.RiskScore)
+
+		if len(t.Labels) > 0 {
+			fmt.Printf("Labels: %s\n", strings.Join(t.Labels, ", "))
+		}
+
+		if len(t.EnrollPrincipals) > 0 {
+			fmt.Printf("Enroll Principals: %s\n", strings.Join(t.EnrollPrincipals, ", "))
+		}
+
+		if len(t.AutoEnrollPrincipals) > 0 {
+			fmt.Printf("AutoEnroll Principals: %s\n", strings.Join(t.AutoEnrollPrincipals, ", "))
+		}
+
+		if len(t.DangerousACLPrincipals) > 0 {
+			fmt.Printf("Dangerous ACL Principals: %s\n", strings.Join(t.DangerousACLPrincipals, ", "))
+		}
+
+		fmt.Printf("Risk Summary: %s\n", t.RiskSummary)
+
+		for _, note := range t.Notes {
+			fmt.Printf("  - %s\n", note)
+		}
+
+		fmt.Println()
 	}
 
 	return emitArtifacts("certsurface", cfg, result)
@@ -395,7 +429,12 @@ func RunLateral(cfg models.Config) int {
 		return fail(err)
 	}
 
-	result := audit.LateralMap(cfg, computers)
+	ipMap, err := client.SearchADIDNSARecordMap()
+	if err != nil {
+		return fail(err)
+	}
+
+	result := audit.LateralMap(cfg, computers, ipMap)
 
 	fmt.Println("REMOTE MANAGEMENT SURFACE MAP")
 	fmt.Println()
@@ -481,6 +520,49 @@ func RunACLAudit(cfg models.Config) int {
 	}
 
 	return emitArtifacts("aclaudit", cfg, result)
+}
+
+func RunACLExposure(cfg models.Config) int {
+	client, err := ldapclient.New(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	targets, err := client.SearchACLExposureTargets()
+	if err != nil {
+		return fail(err)
+	}
+
+	sidMap, err := client.SearchPrincipalSIDMap()
+	if err != nil {
+		return fail(err)
+	}
+
+	result := audit.ACLExposureReview(targets, sidMap, cfg.PrivilegedOnly)
+
+	fmt.Println("ACL EXPOSURE REVIEW")
+	fmt.Println()
+
+	if len(result.Findings) == 0 {
+		fmt.Println("none found")
+		return emitArtifacts("aclexposure", cfg, result)
+	}
+
+	for _, f := range result.Findings {
+		fmt.Printf("[%s] Object:%s Type:%s Principal:%s Right:%s Severity:%s Reason:%s\n",
+			f.Severity,
+			f.Object,
+			f.ObjectType,
+			f.Principal,
+			f.Right,
+			strings.Title(strings.ToLower(string(f.Severity))),
+			f.Reason,
+		)
+	}
+
+	fmt.Println()
+	return emitArtifacts("aclexposure", cfg, result)
 }
 
 func RunTierZero(cfg models.Config) int {
@@ -619,6 +701,180 @@ func emitArtifacts(module string, cfg models.Config, data interface{}) int {
 	}
 
 	return 0
+}
+
+func RunBlast(cfg models.Config) int {
+	client, err := ldapclient.New(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	result, err := audit.BlastReview(client, cfg)
+	if err != nil {
+		return fail(err)
+	}
+
+	fmt.Println("DEFENDER BLAST PRIORITIZATION")
+	fmt.Println()
+	fmt.Printf("Top identities by effective control spread: %d\n", len(result.TopIdentitySpread))
+	for _, row := range result.TopIdentitySpread {
+		fmt.Printf("- %s [%s] score=%d groups=%d hosts=%d\n", row.Name, row.Kind, row.ControlScore, row.PrivilegedGroupCount, row.ServiceHostCount)
+	}
+	fmt.Println()
+	fmt.Printf("Top groups by privilege concentration: %d\n", len(result.TopGroupConcentration))
+	for _, row := range result.TopGroupConcentration {
+		fmt.Printf("- %s score=%d direct=%d nested=%d service=%d\n", row.Name, row.ConcentrationScore, row.DirectMemberCount, row.NestedGroupCount, row.ServiceAccountCount)
+	}
+	fmt.Println()
+	fmt.Printf("Privilege aggregation points: %d\n", len(result.PrivilegeAggregationTop))
+	for _, row := range result.PrivilegeAggregationTop {
+		fmt.Printf("- %s [%s] score=%d\n", row.Host, row.Role, row.AggregationScore)
+	}
+	fmt.Println()
+
+	return emitArtifacts("blast", cfg, result)
+}
+
+func RunAdminSD(cfg models.Config) int {
+	client, err := ldapclient.New(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	result, err := audit.AdminSDReview(client, cfg)
+	if err != nil {
+		return fail(err)
+	}
+
+	fmt.Println("ADMINSDHOLDER / SDPROP REVIEW")
+	fmt.Println()
+	fmt.Printf("Protected objects: %d\n", len(result.ProtectedObjects))
+	fmt.Printf("adminCount=1 with no current reason: %d\n", len(result.NoCurrentReason))
+	fmt.Printf("Inheritance disabled drift: %d\n", len(result.InheritanceDisabledDrift))
+	fmt.Printf("Stale protected objects: %d\n", len(result.StaleProtectedObjects))
+	fmt.Printf("Persistent ACL review objects: %d\n", len(result.PersistentACLReviewObjects))
+	fmt.Println()
+
+	return emitArtifacts("adminsd", cfg, result)
+}
+
+func RunServiceImpact(cfg models.Config) int {
+	client, err := ldapclient.New(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	result, err := audit.ServiceImpactReview(client, cfg)
+	if err != nil {
+		return fail(err)
+	}
+
+	fmt.Println("SERVICE ACCOUNT IMPACT REVIEW")
+	fmt.Println()
+	fmt.Printf("Service accounts reviewed: %d\n", len(result.Accounts))
+	fmt.Printf("Privileged SPN accounts: %d\n", len(result.PrivilegedSPNAccounts))
+	fmt.Printf("Broad reuse accounts: %d\n", len(result.BroadReuseAccounts))
+	fmt.Printf("Admin/service overlap accounts: %d\n", len(result.AdminServiceOverlapAccounts))
+	fmt.Println()
+
+	return emitArtifacts("serviceimpact", cfg, result)
+}
+
+func RunDCAttackSurface(cfg models.Config) int {
+	client, err := ldapclient.New(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	result, err := audit.DCAttackSurfaceReview(client, cfg)
+	if err != nil {
+		return fail(err)
+	}
+
+	fmt.Println("DOMAIN CONTROLLER ATTACK SURFACE")
+	fmt.Println()
+	fmt.Printf("Who can log on to DCs: %d\n", len(result.WhoCanLogOnToDCs))
+	fmt.Printf("Nonstandard accounts on DCs: %d\n", len(result.NonstandardAccountsOnDCs))
+	fmt.Printf("Protocol exposure entries: %d\n", len(result.ProtocolExposure))
+	fmt.Printf("GPOs affecting DC OU: %d\n", len(result.GPOsAffectingDCOU))
+	fmt.Printf("Delegation/group anomalies: %d\n", len(result.DelegationAndGroupAnomaly))
+	fmt.Println()
+
+	return emitArtifacts("dcattacksurface", cfg, result)
+}
+
+func RunPrivMap(cfg models.Config) int {
+	client, err := ldapclient.New(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	defer client.Close()
+
+	result, err := audit.PrivMapReview(client, cfg)
+	if err != nil {
+		return fail(err)
+	}
+
+	fmt.Println("PRIVILEGED MEMBERSHIP MAP")
+	fmt.Println()
+	fmt.Printf("Domain: %s\n", result.Domain)
+	fmt.Printf("Privileged groups: %d\n", result.TotalPrivGroups)
+	fmt.Printf("Privileged users: %d\n", result.TotalUsers)
+	fmt.Printf("Nested groups: %d\n", result.TotalNestedGroups)
+	fmt.Printf("Service accounts: %d\n", result.TotalServiceAccts)
+	fmt.Printf("Review candidates: %d\n\n", result.TotalReviewUsers)
+
+	if len(result.Groups) == 0 {
+		fmt.Println("none found")
+		return emitArtifacts("privmap", cfg, result)
+	}
+
+	for _, g := range result.Groups {
+		fmt.Printf("%s\n", g.Name)
+		fmt.Printf("DN: %s\n", g.DN)
+		fmt.Printf("Direct members: %d | Nested groups: %d | Users: %d | Service accounts: %d | Review candidates: %d\n",
+			g.DirectMemberCount, len(g.NestedGroups), len(g.PrivilegedUsers), len(g.ServiceAccounts), len(g.ReviewCandidates))
+
+		if len(g.NestedGroups) > 0 {
+			fmt.Println("  Nested groups:")
+			for _, ng := range g.NestedGroups {
+				fmt.Printf("    - %s\n", ng.Path)
+			}
+		}
+
+		if len(g.PrivilegedUsers) > 0 {
+			fmt.Println("  Privileged users:")
+			for _, u := range g.PrivilegedUsers {
+				status := "disabled"
+				if u.Enabled {
+					status = "enabled"
+				}
+				fmt.Printf("    - %s (%s)\n", u.Name, status)
+			}
+		}
+
+		if len(g.ServiceAccounts) > 0 {
+			fmt.Println("  Service accounts:")
+			for _, u := range g.ServiceAccounts {
+				fmt.Printf("    - %s\n", u.Name)
+			}
+		}
+
+		if len(g.ReviewCandidates) > 0 {
+			fmt.Println("  Review candidates:")
+			for _, u := range g.ReviewCandidates {
+				fmt.Printf("    - %s\n", u.Path)
+			}
+		}
+
+		fmt.Println()
+	}
+
+	return emitArtifacts("privmap", cfg, result)
 }
 
 func fail(err error) int {

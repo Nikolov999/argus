@@ -1,6 +1,6 @@
 package audit
 
-import "adreview/internal/models"
+import "argus/internal/models"
 
 func TrustAudit(trusts []models.TrustRecord) models.TrustResult {
 	result := models.TrustResult{

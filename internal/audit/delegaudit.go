@@ -1,6 +1,6 @@
 package audit
 
-import "adreview/internal/models"
+import "argus/internal/models"
 
 const (
 	uacTrustedForDelegation = 0x00080000

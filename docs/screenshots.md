@@ -20,9 +20,9 @@ The following screenshots demonstrate the CLI interface and HTML reporting capab
 
 ![GPO Enumeration](screenshots/gpoenum.png)
 
-## Executive Summary
+## Lateral Mapping
 
-![Auto Summary](screenshots/auto.png)
+![Lateral Map](screenshots/lateralmap.png)
 
 ## Tier 0 Inventory
 

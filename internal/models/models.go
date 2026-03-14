@@ -16,6 +16,7 @@ type Config struct {
 	HTMLOut        string
 	TimeoutSeconds int
 	Workers        int
+	AdminNameRegex string
 }
 
 type Severity string
@@ -149,18 +150,31 @@ type DelegationResult struct {
 }
 
 type CertTemplate struct {
-	Name           string   `json:"name"`
-	DisplayName    string   `json:"displayName"`
-	EKUs           []string `json:"ekus,omitempty"`
-	EnrollmentFlag int      `json:"enrollmentFlag"`
-	NameFlag       int      `json:"nameFlag"`
+	Name               string   `json:"name"`
+	DisplayName        string   `json:"displayName"`
+	EKUs               []string `json:"ekus,omitempty"`
+	EnrollmentFlag     int      `json:"enrollmentFlag"`
+	NameFlag           int      `json:"nameFlag"`
+	RASignatureCount   int      `json:"raSignatureCount,omitempty"`
+	SchemaVersion      int      `json:"schemaVersion,omitempty"`
+	SecurityDescriptor []byte   `json:"-"`
 }
 
 type CertFinding struct {
-	Name        string   `json:"name"`
-	DisplayName string   `json:"displayName"`
-	EKUs        []string `json:"ekus,omitempty"`
-	RiskSummary string   `json:"riskSummary"`
+	Name                   string   `json:"name"`
+	DisplayName            string   `json:"displayName"`
+	EKUs                   []string `json:"ekus,omitempty"`
+	EnrollmentFlag         int      `json:"enrollmentFlag,omitempty"`
+	NameFlag               int      `json:"nameFlag,omitempty"`
+	RASignatureCount       int      `json:"raSignatureCount,omitempty"`
+	SchemaVersion          int      `json:"schemaVersion,omitempty"`
+	EnrollPrincipals       []string `json:"enrollPrincipals,omitempty"`
+	AutoEnrollPrincipals   []string `json:"autoEnrollPrincipals,omitempty"`
+	DangerousACLPrincipals []string `json:"dangerousAclPrincipals,omitempty"`
+	Labels                 []string `json:"labels,omitempty"`
+	RiskScore              int      `json:"riskScore,omitempty"`
+	RiskSummary            string   `json:"riskSummary"`
+	Notes                  []string `json:"notes,omitempty"`
 }
 
 type CertResult struct {
@@ -230,6 +244,31 @@ type ACLAuditResult struct {
 	Findings []ACLFinding `json:"findings"`
 }
 
+type ACLExposureTarget struct {
+	Name               string   `json:"name"`
+	DN                 string   `json:"distinguishedName"`
+	ObjectType         string   `json:"objectType"`
+	ObjectClass        []string `json:"objectClass,omitempty"`
+	SecurityDescriptor []byte   `json:"-"`
+}
+
+type ACLExposureFinding struct {
+	Object         string   `json:"object"`
+	ObjectType     string   `json:"objectType"`
+	DN             string   `json:"distinguishedName"`
+	Principal      string   `json:"principal"`
+	PrincipalSID   string   `json:"principalSid,omitempty"`
+	Right          string   `json:"right"`
+	Severity       Severity `json:"severity"`
+	Reason         string   `json:"reason"`
+	Inherited      bool     `json:"inherited"`
+	ObjectTypeGUID string   `json:"objectTypeGuid,omitempty"`
+}
+
+type ACLExposureResult struct {
+	Findings []ACLExposureFinding `json:"findings"`
+}
+
 type EnrollmentServiceRecord struct {
 	Name        string `json:"name"`
 	DNSHostName string `json:"dnsHostName"`
@@ -271,4 +310,155 @@ type ReportEnvelope struct {
 	Module      string      `json:"module"`
 	Config      Config      `json:"config"`
 	Data        interface{} `json:"data"`
+}
+
+type Account struct {
+	Name    string `json:"name"`
+	UPN     string `json:"upn,omitempty"`
+	DN      string `json:"distinguishedName"`
+	Path    string `json:"path"`
+	Enabled bool   `json:"enabled"`
+	Kind    string `json:"kind"`
+}
+
+type NestedGroup struct {
+	Name string `json:"name"`
+	DN   string `json:"distinguishedName"`
+	Path string `json:"path"`
+}
+
+type PrivilegedGroup struct {
+	Name              string        `json:"name"`
+	DN                string        `json:"distinguishedName"`
+	DirectMemberCount int           `json:"directMemberCount"`
+	NestedGroups      []NestedGroup `json:"nestedGroups,omitempty"`
+	PrivilegedUsers   []Account     `json:"privilegedUsers,omitempty"`
+	ServiceAccounts   []Account     `json:"serviceAccounts,omitempty"`
+	ReviewCandidates  []Account     `json:"reviewCandidates,omitempty"`
+}
+
+type PrivMapResult struct {
+	Domain             string            `json:"domain"`
+	AdminNameRegexUsed string            `json:"adminNameRegexUsed"`
+	Groups             []PrivilegedGroup `json:"groups"`
+	TotalPrivGroups    int               `json:"totalPrivGroups"`
+	TotalUsers         int               `json:"totalUsers"`
+	TotalNestedGroups  int               `json:"totalNestedGroups"`
+	TotalServiceAccts  int               `json:"totalServiceAccts"`
+	TotalReviewUsers   int               `json:"totalReviewUsers"`
+}
+
+type BlastIdentitySummary struct {
+	Name                 string   `json:"name"`
+	Kind                 string   `json:"kind"`
+	DN                   string   `json:"distinguishedName"`
+	PrivilegedGroupCount int      `json:"privilegedGroupCount"`
+	PrivilegedGroups     []string `json:"privilegedGroups,omitempty"`
+	ServiceHostCount     int      `json:"serviceHostCount,omitempty"`
+	ServiceHosts         []string `json:"serviceHosts,omitempty"`
+	ControlScore         int      `json:"controlScore"`
+	Reason               string   `json:"reason"`
+}
+
+type BlastGroupSummary struct {
+	Name                string   `json:"name"`
+	DN                  string   `json:"distinguishedName"`
+	DirectMemberCount   int      `json:"directMemberCount"`
+	NestedGroupCount    int      `json:"nestedGroupCount"`
+	UserCount           int      `json:"userCount"`
+	ServiceAccountCount int      `json:"serviceAccountCount"`
+	ConcentrationScore  int      `json:"concentrationScore"`
+	KeyPaths            []string `json:"keyPaths,omitempty"`
+}
+
+type BlastHostSummary struct {
+	Host                   string   `json:"host"`
+	DN                     string   `json:"distinguishedName"`
+	Role                   string   `json:"role"`
+	PrivilegedIdentityRefs []string `json:"privilegedIdentityRefs,omitempty"`
+	ServiceAccounts        []string `json:"serviceAccounts,omitempty"`
+	AggregationScore       int      `json:"aggregationScore"`
+	Reason                 string   `json:"reason"`
+}
+
+type BlastResult struct {
+	TopIdentitySpread       []BlastIdentitySummary `json:"topIdentitySpread"`
+	TopGroupConcentration   []BlastGroupSummary    `json:"topGroupConcentration"`
+	PrivilegeAggregationTop []BlastHostSummary     `json:"privilegeAggregationTop"`
+}
+
+type AdminSDObject struct {
+	Name                 string   `json:"name"`
+	ObjectType           string   `json:"objectType"`
+	DN                   string   `json:"distinguishedName"`
+	AdminCount           int      `json:"adminCount"`
+	CurrentlyPrivileged  bool     `json:"currentlyPrivileged"`
+	PrivilegeReasons     []string `json:"privilegeReasons,omitempty"`
+	InheritanceDisabled  bool     `json:"inheritanceDisabled"`
+	PersistenceIndicator string   `json:"persistenceIndicator"`
+}
+
+type AdminSDResult struct {
+	ProtectedObjects           []AdminSDObject `json:"protectedObjects"`
+	NoCurrentReason            []AdminSDObject `json:"noCurrentReason"`
+	InheritanceDisabledDrift   []AdminSDObject `json:"inheritanceDisabledDrift"`
+	StaleProtectedObjects      []AdminSDObject `json:"staleProtectedObjects"`
+	PersistentACLReviewObjects []AdminSDObject `json:"persistentAclReviewObjects"`
+}
+
+type ServiceImpactAccount struct {
+	Name                   string   `json:"name"`
+	DN                     string   `json:"distinguishedName"`
+	Kind                   string   `json:"kind"`
+	Privileged             bool     `json:"privileged"`
+	PrivilegeReasons       []string `json:"privilegeReasons,omitempty"`
+	HostCount              int      `json:"hostCount"`
+	Hosts                  []string `json:"hosts,omitempty"`
+	SPNs                   []string `json:"spns,omitempty"`
+	SingleCompromiseImpact string   `json:"singleCompromiseImpact"`
+}
+
+type ServiceImpactResult struct {
+	Accounts                    []ServiceImpactAccount `json:"accounts"`
+	PrivilegedSPNAccounts       []ServiceImpactAccount `json:"privilegedSpnAccounts"`
+	BroadReuseAccounts          []ServiceImpactAccount `json:"broadReuseAccounts"`
+	AdminServiceOverlapAccounts []ServiceImpactAccount `json:"adminServiceOverlapAccounts"`
+}
+
+type DCAttackSurfaceIdentity struct {
+	Name   string   `json:"name"`
+	DN     string   `json:"distinguishedName"`
+	Groups []string `json:"groups,omitempty"`
+}
+
+type DCAttackSurfaceAccount struct {
+	Name    string   `json:"name"`
+	DN      string   `json:"distinguishedName"`
+	Hosts   []string `json:"hosts,omitempty"`
+	SPNs    []string `json:"spns,omitempty"`
+	Comment string   `json:"comment,omitempty"`
+}
+
+type DCAttackSurfaceHost struct {
+	Host              string   `json:"host"`
+	DN                string   `json:"distinguishedName"`
+	Protocols         []string `json:"protocols,omitempty"`
+	ServiceAccounts   []string `json:"serviceAccounts,omitempty"`
+	DelegationSignals []string `json:"delegationSignals,omitempty"`
+}
+
+type DCAttackSurfaceGPO struct {
+	Name    string `json:"name"`
+	GUID    string `json:"guid,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Comment string `json:"comment,omitempty"`
+}
+
+type DCAttackSurfaceResult struct {
+	WhoCanLogOnToDCs          []DCAttackSurfaceIdentity `json:"whoCanLogOnToDcs"`
+	NonstandardAccountsOnDCs  []DCAttackSurfaceAccount  `json:"nonstandardAccountsOnDcs"`
+	ProtocolExposure          []DCAttackSurfaceHost     `json:"protocolExposure"`
+	GPOsAffectingDCOU         []DCAttackSurfaceGPO      `json:"gposAffectingDcOu"`
+	DelegationAndGroupAnomaly []DCAttackSurfaceHost     `json:"delegationAndGroupAnomaly"`
+	CollectionNotes           []string                  `json:"collectionNotes,omitempty"`
 }

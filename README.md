@@ -1,13 +1,65 @@
-# ADReview
+# ARGUS
 
 **Active Directory Review Framework**  
 **Author:** Bobo Nikolov, EchoPentest
 
-ADReview is a modular, read-only Active Directory security assessment toolkit written in Go. It is designed for configuration auditing, exposure review, and defensive reporting in enterprise environments.
+---
+
+## Quick Install 
+
+### Install for Linux
+
+- wget https://github.com/Nikolov999/argus/dist/v2.0.0/argus_linux_amd64
+
+- chmod +x argus_linux_amd64
+
+- sudo mv adreview_linux_amd64 /usr/local/bin/adreview
+
+- argus --help
+
+- argus_linux_amd64 256 hash - 656b314027d1b874ec395005c55f57d926cd7037aa0190f8f57e9c2fce558d10
+
+
+### Install for Windows
+
+Download `argus_windows_amd64.zip`.
+
+Run from PowerShell:
+
+
+argus_windows_amd64.exe kerb -d corp.local -dc 10.10.10.5
+
+argus_windows_amd64.zip 256 hash - dd1656b200214c71ab6445bb5372b013d104770733209f560fd672fcc65a21a7
+
+
+### Install for MacOS
+
+
+Download the correct binary for your architecture:
+
+Intel:
+- argus_darwin_amd64
+
+argus_darwin_amd64 256 hash - dbf99d89259e2e18146cc738fc1cc357755ef9814ada8687b7bc41b7f330b56a 
+
+Apple Silicon:
+- argus_darwin_arm64
+
+argus_darwin_arm64 256 hash - e8c6a707b3b72117104d0a33feea9a734dc02a6bef4241dd3ee84c9485e31fdc
+
+Make executable:
+chmod +x argus_darwin_arm64
+
+Run:
+./argus_darwin_arm64 --help
+
+---
+
+ARGUS is a modular, read-only Active Directory security assessment toolkit written in Go. It is designed for configuration auditing, exposure review, and defensive reporting in enterprise environments.
 
 ## Why this project exists
 
-Active Directory environments accumulate configuration drift, privilege sprawl, legacy Kerberos settings, unmanaged delegation, inconsistent GPOs, and broad administrative exposure. ADReview was built to provide a fast, operator-friendly CLI for reviewing those conditions through a structured, extensible framework.
+Active Directory environments accumulate configuration drift, privilege sprawl, legacy Kerberos settings, unmanaged delegation, inconsistent GPOs, and broad administrative exposure. ARGUS was built to provide a fast, operator-friendly CLI for reviewing those conditions through a structured, extensible framework.
 
 ---
 
@@ -64,12 +116,12 @@ Active Directory environments accumulate configuration drift, privilege sprawl, 
 ## Example
 
 ```bash
-adreview auto -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
+argus auto -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
 Example output
 Active Directory Review Framework
 by EchoPentest
 
-ADREVIEW EXECUTIVE SUMMARY
+ARGUS EXECUTIVE SUMMARY
 
 Users: 1532
 Groups: 221
@@ -86,11 +138,11 @@ AD CS templates reviewed: 3
 ## Installation
 
 ### Build locally
-go build -o adreview ./cmd/adreview
+go build -o argus ./cmd/argus
 
 ### Install globally
-sudo cp adreview /usr/local/bin/adreview
-sudo chmod +x /usr/local/bin/adreview
+sudo cp argus /usr/local/bin/argus
+sudo chmod +x /usr/local/bin/argus
 hash -r
 
 ---
@@ -98,23 +150,23 @@ hash -r
 ## Usage
 
 ### Inventory
-adreview enum -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
+argus enum -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
 
-###Kerberos review
-adreview kerb -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --password-age
+### Kerberos review
+argus kerb -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --password-age
 
 ### GPO review
-adreview gpoenum -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
+argus gpoenum -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
 
 ### Tier 0 inventory
-adreview tierzero -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
+argus tierzero -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
 
 ### Privilege sprawl review
-adreview sprawl -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
+argus sprawl -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!'
 
 ### Reporting
-adreview kerb -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --json kerb.json
-adreview auto -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --html review.html
+argus kerb -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --json kerb.json
+argus auto -d corp.local -dc 10.10.10.5 -u 'CORP\auditor' -p 'Password123!' --html review.html
 
 ### Reporting outputs
 
@@ -131,7 +183,7 @@ Each module can export structured HTML reports suitable for documentation or cli
 Example:
 
 ```bash
-adreview kerb -d corp.local -dc 10.10.10.5 --html kerberos_report.html
+argus kerb -d corp.local -dc 10.10.10.5 --html kerberos_report.html
 
 ---
 
@@ -153,7 +205,7 @@ More detail is available in docs/architecture.md.
 
 ## Safe scope
 
-ADReview is designed for defensive assessment and reporting. It does not perform:
+ARGUS is designed for defensive assessment and reporting. It does not perform:
 
 - credential extraction
 
@@ -168,7 +220,7 @@ ADReview is designed for defensive assessment and reporting. It does not perform
 - privilege escalation workflows
 
 ### Repository layout
-adreview/
+argus/
 ├── cmd/
 ├── internal/
 ├── docs/
@@ -210,9 +262,9 @@ adreview/
 
 ![Sprawl](screenshots/sprawl.png)
 
-### Executive Summary
+### Lateral Mapping
 
-![Auto Summary](docs/screenshots/auto.png)
+![Auto Summary](docs/screenshots/lateralmap.png)
 
 
 ---

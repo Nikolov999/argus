@@ -1,8 +1,8 @@
-# ADReview Architecture
+# ARGUS Architecture
 
 ## Overview
 
-ADReview is a modular, read-only Active Directory assessment framework built in Go. It separates collection, modeling, analysis, reporting, and presentation into distinct layers to keep the codebase maintainable and extensible.
+ARGUS is a modular, read-only Active Directory assessment framework built in Go. It separates collection, modeling, analysis, reporting, and presentation into distinct layers to keep the codebase maintainable and extensible.
 
 ---
 
@@ -109,7 +109,7 @@ The CLI layer:
 ### Design principles
 - Read-only review
 
-ADReview is intended for defensive assessment and documentation. It does not modify directory objects or perform exploit workflows.
+ARGUS is intended for defensive assessment and documentation. It does not modify directory objects or perform exploit workflows.
 
 ### Clear module boundaries
 

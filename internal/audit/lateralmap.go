@@ -1,15 +1,40 @@
 package audit
 
 import (
-	"adreview/internal/models"
+	"argus/internal/models"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
-func LateralMap(cfg models.Config, computers []models.ComputerRecord) models.LateralResult {
+type lateralPort struct {
+	Port int
+	Name string
+}
+
+var defaultLateralPorts = []lateralPort{
+	{22, "SSH"},
+	{80, "HTTP"},
+	{88, "Kerberos"},
+	{135, "RPC"},
+	{139, "NetBIOS"},
+	{389, "LDAP"},
+	{443, "HTTPS"},
+	{445, "SMB"},
+	{636, "LDAPS"},
+	{3389, "RDP"},
+	{5985, "WinRM"},
+	{5986, "WinRM TLS"},
+	{1433, "MSSQL"},
+	{3268, "Global Catalog"},
+	{3269, "GC TLS"},
+	{47001, "WinRM Compatibility"},
+}
+
+func LateralMap(cfg models.Config, computers []models.ComputerRecord, ipMap map[string][]string) models.LateralResult {
 	workers := cfg.Workers
 	if workers <= 0 {
 		workers = 32
@@ -40,8 +65,7 @@ func LateralMap(cfg models.Config, computers []models.ComputerRecord) models.Lat
 		go func() {
 			defer wg.Done()
 			for j := range jobs {
-				target := scanComputer(cfg, j.Computer, timeout)
-				results <- result{Target: target}
+				results <- result{Target: scanComputer(j.Computer, ipMap, timeout)}
 			}
 		}()
 	}
@@ -56,7 +80,7 @@ func LateralMap(cfg models.Config, computers []models.ComputerRecord) models.Lat
 	}()
 
 	out := models.LateralResult{
-		Targets: make([]models.LateralService, 0),
+		Targets: make([]models.LateralService, 0, len(computers)),
 	}
 
 	for r := range results {
@@ -65,123 +89,167 @@ func LateralMap(cfg models.Config, computers []models.ComputerRecord) models.Lat
 		}
 	}
 
+	sort.Slice(out.Targets, func(i, j int) bool {
+		return strings.ToLower(out.Targets[i].Host) < strings.ToLower(out.Targets[j].Host)
+	})
+
 	return out
 }
 
-func scanComputer(cfg models.Config, c models.ComputerRecord, timeout time.Duration) *models.LateralService {
-	candidates := buildHostCandidates(cfg, c)
-	if len(candidates) == 0 {
+func scanComputer(c models.ComputerRecord, ipMap map[string][]string, timeout time.Duration) *models.LateralService {
+	displayHost := preferredComputerName(c)
+	if displayHost == "" {
 		return nil
 	}
 
-	ports := []struct {
-		Port  int
-		Label string
-	}{
-		{135, "RPC (135)"},
-		{139, "NetBIOS Session (139)"},
-		{445, "SMB (445)"},
-		{3389, "RDP (3389)"},
-		{5985, "WinRM HTTP (5985)"},
-		{5986, "WinRM HTTPS (5986)"},
-		{47001, "WinRM Compatibility (47001)"},
-	}
-
-	services := make([]string, 0, len(ports))
-	reachableHost := ""
-
-	for _, host := range candidates {
-		found := false
-		for _, p := range ports {
-			if tcpOpen(host, p.Port, timeout) {
-				services = appendIfMissing(services, p.Label)
-				found = true
-			}
-		}
-		if found && reachableHost == "" {
-			reachableHost = host
+	ips := lookupComputerIPs(c, ipMap)
+	if len(ips) == 0 {
+		return &models.LateralService{
+			Host:     displayHost,
+			Services: []string{"no IP mapping found in ADIDNS"},
 		}
 	}
+
+	services := scanPortsAcrossIPs(ips, timeout)
+
+	display := fmt.Sprintf("%s [%s]", displayHost, strings.Join(ips, ", "))
 
 	if len(services) == 0 {
-		return nil
-	}
-
-	displayHost := reachableHost
-	if displayHost == "" {
-		displayHost = c.DNSHostName
-	}
-	if displayHost == "" {
-		displayHost = c.Name
+		return &models.LateralService{
+			Host:     display,
+			Services: []string{"no tested ports reachable"},
+		}
 	}
 
 	return &models.LateralService{
-		Host:     displayHost,
+		Host:     display,
 		Services: services,
 	}
 }
 
-func buildHostCandidates(cfg models.Config, c models.ComputerRecord) []string {
-	seen := map[string]bool{}
-	out := []string{}
+func scanPortsAcrossIPs(ips []string, timeout time.Duration) []string {
+	type portResult struct {
+		Label string
+	}
+
+	results := make(chan portResult, len(defaultLateralPorts))
+	var wg sync.WaitGroup
+
+	for _, p := range defaultLateralPorts {
+		wg.Add(1)
+		go func(p lateralPort) {
+			defer wg.Done()
+
+			for _, ip := range ips {
+				if tcpOpen(ip, p.Port, timeout) {
+					results <- portResult{
+						Label: fmt.Sprintf("%d/tcp %s", p.Port, p.Name),
+					}
+					return
+				}
+			}
+		}(p)
+	}
+
+	wg.Wait()
+	close(results)
+
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(defaultLateralPorts))
+
+	for r := range results {
+		if _, exists := seen[r.Label]; exists {
+			continue
+		}
+		seen[r.Label] = struct{}{}
+		out = append(out, r.Label)
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+func lookupComputerIPs(c models.ComputerRecord, ipMap map[string][]string) []string {
+	keys := computerLookupKeys(c)
+
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+
+	for _, key := range keys {
+		ips, ok := ipMap[key]
+		if !ok {
+			continue
+		}
+
+		for _, ip := range ips {
+			ip = strings.TrimSpace(ip)
+			if net.ParseIP(ip) == nil {
+				continue
+			}
+			if _, exists := seen[ip]; exists {
+				continue
+			}
+			seen[ip] = struct{}{}
+			out = append(out, ip)
+		}
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+func computerLookupKeys(c models.ComputerRecord) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 4)
 
 	add := func(v string) {
-		v = strings.TrimSpace(v)
+		v = normalizeDNSKey(v)
 		if v == "" {
 			return
 		}
-		v = strings.TrimSuffix(v, "$")
-		if !seen[strings.ToLower(v)] {
-			seen[strings.ToLower(v)] = true
-			out = append(out, v)
+		if _, exists := seen[v]; exists {
+			return
 		}
+		seen[v] = struct{}{}
+		out = append(out, v)
 	}
 
 	add(c.DNSHostName)
 	add(c.Name)
 
-	if c.Name != "" && !strings.Contains(c.Name, ".") && cfg.Domain != "" {
-		add(c.Name + "." + cfg.Domain)
+	if c.DNSHostName != "" {
+		add(strings.Split(strings.TrimSpace(c.DNSHostName), ".")[0])
 	}
 
-	if c.DNSHostName != "" {
-		short := strings.Split(c.DNSHostName, ".")[0]
-		add(short)
+	if c.Name != "" && strings.Contains(c.Name, ".") {
+		add(strings.Split(strings.TrimSpace(c.Name), ".")[0])
 	}
 
 	return out
 }
 
-func appendIfMissing(items []string, item string) []string {
-	for _, v := range items {
-		if v == item {
-			return items
-		}
+func normalizeDNSKey(v string) string {
+	v = strings.TrimSpace(v)
+	v = strings.TrimSuffix(v, "$")
+	v = strings.TrimSuffix(v, ".")
+	return strings.ToLower(v)
+}
+
+func preferredComputerName(c models.ComputerRecord) string {
+	if strings.TrimSpace(c.DNSHostName) != "" {
+		return strings.TrimSpace(c.DNSHostName)
 	}
-	return append(items, item)
+	if strings.TrimSpace(c.Name) != "" {
+		return strings.TrimSpace(strings.TrimSuffix(c.Name, "$"))
+	}
+	return ""
 }
 
 func tcpOpen(host string, port int, timeout time.Duration) bool {
-	address := fmt.Sprintf("%s:%d", host, port)
-
-	conn, err := net.DialTimeout("tcp", address, timeout)
-	if err == nil {
-		_ = conn.Close()
-		return true
-	}
-
-	ips, resolveErr := net.LookupHost(host)
-	if resolveErr != nil {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
+	if err != nil {
 		return false
 	}
-
-	for _, ip := range ips {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, port), timeout)
-		if err == nil {
-			_ = conn.Close()
-			return true
-		}
-	}
-
-	return false
+	_ = conn.Close()
+	return true
 }

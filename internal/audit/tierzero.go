@@ -1,7 +1,7 @@
 package audit
 
 import (
-	"adreview/internal/models"
+	"argus/internal/models"
 	"strings"
 )
 

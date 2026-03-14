@@ -1,6 +1,6 @@
 package audit
 
-import "adreview/internal/models"
+import "argus/internal/models"
 
 func ADCSReview() models.ADCSResult {
 	return models.ADCSResult{

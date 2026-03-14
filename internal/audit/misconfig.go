@@ -1,6 +1,6 @@
 package audit
 
-import "adreview/internal/models"
+import "argus/internal/models"
 
 func MisconfigReview(users []models.UserRecord) models.MisconfigResult {
 	findings := make([]models.MisconfigFinding, 0)

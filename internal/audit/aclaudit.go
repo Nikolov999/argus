@@ -1,6 +1,6 @@
 package audit
 
-import "adreview/internal/models"
+import "argus/internal/models"
 
 func ACLAudit(targets []models.ACLTargetRecord) models.ACLAuditResult {
 	result := models.ACLAuditResult{

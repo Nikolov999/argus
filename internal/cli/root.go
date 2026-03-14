@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"adreview/internal/models"
-	"adreview/internal/util"
+	"argus/internal/models"
+	"argus/internal/util"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func Execute(args []string) int {
@@ -64,6 +65,18 @@ func Execute(args []string) int {
 		return RunTierZero(cfg)
 	case "sprawl":
 		return RunSprawl(cfg)
+	case "privmap":
+	        return RunPrivMap(cfg)
+	case "aclexposure":
+		return RunACLExposure(cfg)
+	case "blast":
+		return RunBlast(cfg)
+	case "adminsd":
+		return RunAdminSD(cfg)
+	case "serviceimpact":
+		return RunServiceImpact(cfg)
+	case "dcattacksurface":
+		return RunDCAttackSurface(cfg)
 	case "auto":
 		return RunAuto(cfg)
 	default:
@@ -81,49 +94,96 @@ func defaultConfig() models.Config {
 }
 
 func printBanner() {
-	fmt.Println(`
-    ___    ____  ____  _______    _________ _       __
-   /   |  / __ \/ __ \/ ____/ |  / /  _/ _ \ |     / /
-  / /| | / / / / /_/ / __/  | | / // //  __/ | /| / /
- / ___ |/ /_/ / _, _/ /___  | |/ // // /\___| |/ |/ /
-/_/  |_/_____/_/ |_/_____/  |___/___/_/      |__/|__/
+	lines := []string{
+		`      █████╗ ██████╗  ██████╗ ██╗   ██╗ ██████╗         ╭─────────╮`,
+		`     ██╔══██╗██╔══██╗██╔════╝ ██║   ██║██╔════╝         │ ╭─────╮ │`,
+		`     ███████║██████╔╝██║  ███╗██║   ██║╚█████╗          ││ ◉   ◉ ││`,
+		`     ██╔══██║██╔══██╗██║   ██║██║   ██║ ╚═══██╗         ││   ◡   ││`,
+		`     ██║  ██║██║  ██║╚██████╔╝╚██████╔╝██████╔╝         │ ╰─────╯ │`,
+		`     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝          ╰─────────╯`,
+		`                    Active Directory Visibility Framework          `,
+		`                           By Bobo, EchoPentest                    `,
+	}
 
-        Active Directory Review Framework
-                 by Bobo, EchoPentest
-`)
+	start := [3]int{116, 58, 255}
+	end := [3]int{214, 128, 255}
+	reset := "\x1b[0m"
+
+	for _, line := range lines {
+		fmt.Println(applyGradient(line, start, end) + reset)
+	}
+
+	fmt.Println()
+}
+
+func applyGradient(s string, start, end [3]int) string {
+	runes := []rune(s)
+	if len(runes) == 0 {
+		return s
+	}
+	if len(runes) == 1 {
+		return fmt.Sprintf("\x1b[38;2;%d;%d;%dm%s", start[0], start[1], start[2], s)
+	}
+
+	var b strings.Builder
+	last := len(runes) - 1
+
+	for i, r := range runes {
+		rr := start[0] + (end[0]-start[0])*i/last
+		gg := start[1] + (end[1]-start[1])*i/last
+		bb := start[2] + (end[2]-start[2])*i/last
+		b.WriteString(fmt.Sprintf("\x1b[38;2;%d;%d;%dm%c", rr, gg, bb, r))
+	}
+
+	return b.String()
 }
 
 func printUsage() {
-	fmt.Println(`adreview <module> [options]
+	fmt.Println(`argus <module> [options]
 
 Modules:
-  enum         Domain inventory counts
-  kerb         Kerberos exposure review
-  misconfig    Read-only misconfiguration review
-  adcs         Basic AD CS review scaffold
-  gpoenum      Group Policy Object inventory
-  trustaudit   Domain trust inventory
-  delegaudit   Delegation configuration review
-  certsurface  Certificate template surface review
-  adminscope   Privileged group scope review
-  lateralmap   Remote management surface inventory
-  shareaudit   SMB exposure inventory
-  aclaudit     Delegation and protected-object ACL indicators
-  tierzero     Tier 0 asset and identity inventory
-  sprawl       Privilege sprawl review
-  auto         Run core review
+
+ Inventory:
+   enum            Domain inventory counts
+   tierzero        Tier 0 asset and identity inventory
+   gpoenum         Group Policy Object inventory
+   trustaudit      Domain trust inventory
+ Exposure:
+   kerb            Kerberos exposure review
+   misconfig       Read-only misconfiguration review
+   shareaudit      SMB exposure inventory
+   lateralmap      Remote management surface inventory
+   aclexposure     Dangerous ACL rights exposure review
+ Privilege:
+   sprawl          Privilege sprawl review
+   privmap         Privileged group membership map
+   adminscope      Privileged group scope review
+   blast           Defender-oriented blast radius prioritization
+   adminsd         AdminSDHolder and SDProp drift review
+   serviceimpact   Service account privilege and dependency review
+   dcattacksurface Domain controller exposure inventory
+ Delegation and ACLs:
+   aclaudit        Delegation and protected-object ACL indicators
+   delegaudit      Delegation configuration review
+ PKI:
+   adcs            Basic AD CS review scaffold
+   certsurface     Certificate template surface review
+ Core Review:
+   auto            Run core review
+  
 
 Common options:
-  -d              Domain, for example corp.local
-  -dc             Domain controller hostname or IP
-  -ldaps          Use LDAPS
-  -u              Bind username
-  -p              Bind password
-  --json          Write JSON report
-  --html          Write HTML report
-  --privileged-check
-                  Restrict kerberos review output to privileged principals
-  --password-age  Enable password age review
-  --timeout       Network/LDAP timeout in seconds
-  --workers       Concurrent workers for network-heavy modules`)
+  -d                  Domain, for example corp.local
+  -dc                 Domain controller hostname or IP
+  -ldaps              Use LDAPS
+  -u                  Bind username
+  -p                  Bind password
+  --json              Write JSON report
+  --html              Write HTML report
+  --privileged-check  Restrict kerberos review output to privileged principals
+  --privileged-only   Restrict ACL exposure review to high-value targets
+  --password-age      Enable password age review
+  --timeout           Network/LDAP timeout in seconds
+  --workers           Concurrent workers for network-heavy modules
+  --admin-name-regex  Regex used by privmap to suppress expected admin naming`)
 }
