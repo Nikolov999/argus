@@ -132,6 +132,7 @@ Privileged SPN accounts: 1
 Legacy encryption review items: 6
 Misconfiguration findings: 4
 AD CS templates reviewed: 3
+```
 
 ---
 
@@ -184,6 +185,7 @@ Example:
 
 ```bash
 argus kerb -d corp.local -dc 10.10.10.5 --html kerberos_report.html
+```
 
 ---
 
