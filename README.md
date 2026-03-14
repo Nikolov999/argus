@@ -96,20 +96,28 @@ Active Directory environments accumulate configuration drift, privilege sprawl, 
 | Module | Description |
 |---|---|
 | `enum` | Domain inventory counts |
-| `kerb` | Kerberos exposure review |
-| `misconfig` | Configuration hygiene findings |
-| `adcs` | AD CS summary |
+| `tierzero` | Tier 0 asset and identity inventory |
 | `gpoenum` | Group Policy Object inventory |
 | `trustaudit` | Domain trust inventory |
-| `delegaudit` | Delegation review |
-| `certsurface` | Certificate template surface review |
-| `adminscope` | Privileged group scope review |
-| `lateralmap` | Remote administration surface inventory |
+| `kerb` | Kerberos exposure review |
+| `misconfig` | Read-only misconfiguration review |
 | `shareaudit` | SMB exposure inventory |
-| `aclaudit` | Delegation and protected-object ACL indicators |
-| `tierzero` | Tier 0 asset and identity inventory |
+| `lateralmap` | Remote administration surface inventory |
+| `aclexposure` | Dangerous ACL rights exposure review |
 | `sprawl` | Privilege sprawl review |
+| `privmap` | Privileged group membership map |
+| `adminscope` | Privileged group scope review |
+| `blast` | Defender-oriented blast radius prioritization |
+| `adminsd` | AdminSDHolder and SDProp drift review |
+| `serviceimpact` | Service account privilege and dependency review |
+| `daattacksurface` | Domain controller exposure inventory |
+| `aclaudit` | Delegation and protected-object ACL indicators |
+| `delegaudit` | Delegation configuration review |
+| `adcs` | Basic AD CS review scaffold |
+| `certsurface` | Certificate template surface review |
 | `auto` | Combined core assessment |
+
+
 
 ---
 
